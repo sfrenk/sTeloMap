@@ -1,5 +1,0 @@
-test_2017_test_7	test_2017	GGGGG	0
-test_2017_test_8	test_2017	CCCC	0
-test_2017_test_1	test_2017	ATTAA	0
-test_2017_test_2	test_2017	TTTTT	0
-test_2017_test_5	test_2017	TAAAAA	3

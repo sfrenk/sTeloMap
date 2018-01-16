@@ -1,2 +1,0 @@
-gent_mut7_1	I	1000	20M
-gent_mut7_2	II	100000	19M1S
