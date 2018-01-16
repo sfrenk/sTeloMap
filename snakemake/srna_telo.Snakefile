@@ -3,13 +3,40 @@ import re
 import sys
 import os
 
-configfile: "config.json"
+############################    DESCRIPTION    ##############################
 
+# Pipeline for analyzing telomere-related small RNAs (telo-sRNAs).
+# Reads mapping to telomeres with 0-3 mismatches are identified and stored in a SQLite3 database along with library metadata.
+
+# Usage:
+#	1. Use setup_working_dir.sh to set up the working directory for analysis:
+		#	setup_working_dir.sh -p srna_telo -d <directory containing reads>
+#	2. Run the snakemake script
+		# bash run_snakemake.sh
+
+
+############################    PARAMETERS    ##############################
+
+# Input parameters
+BASEDIR = ""
+EXTENSION = ".fa.gz"
+
+# Filtering parameters
+FILTER_BASE = "A,T,C,G"
+SIZE = "18,30"
+TRIM = False
+MIN_TRIM_LENGTH = 0
+
+# Mapping parameters
 TELO_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/telomere/bowtie/telomere"
 GENOME_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/WS251/genome/bowtie/genome"
-BASEDIR = config["basedir"]
+MULTI_FLAG = "-M 1"
+MISMATCH = "0"
+
+###############################################################################
+
+# By default, the dataset name is taken form the read directory name.
 DATASET = re.search("/([^/]*)/?$", BASEDIR).group(1)
-EXTENSION = config["extension"]
 
 SAMPLES = glob.glob(BASEDIR + "/*" + EXTENSION)
 SAMPLES = [ re.search(BASEDIR + "/?([^/]+)" + EXTENSION, x).group(1) for x in SAMPLES ]
@@ -29,10 +56,10 @@ rule filter_srna:
 	output:
 		"filtered/{sample}.fa"
 	params:
-		filter_base = config["filter_params"]["filter_base"],
-		size = config["filter_params"]["size"],
-		trim = config["filter_params"]["trim"],
-		min_trim_length = config["filter_params"]["min_trim_length"]
+		filter_base = FILTER_BASE,
+		size = SIZE,
+		trim = TRIM,
+		min_trim_length = MIN_TRIM_LENGTH
 	log:
 		"logs/{sample}_filter.log"
 	shell:
@@ -50,11 +77,11 @@ rule bowtie_mapping_genome:
 	output: "bowtie_out/{sample}.sam"
 	params:
 		idx = GENOME_INDEX,
-		multi_flag = config["map_params"]["multi_flag"],
-		mismatch = config["map_params"]["mismatch"]
+		multi_flag = MULTI_FLAG,
+		mismatch = MISMATCH
 	log:
 		"logs/{sample}_map_genome.log"
-	threads: 4
+	threads: 8
 	shell:
 		"bowtie -f --best --strata -S \
 		-p {threads} \
@@ -66,9 +93,11 @@ rule bowtie_mapping_genome:
 rule convert_to_bam:
 	input: "bowtie_out/{sample}.sam"
 	output: 
-		"genome/{sample}_genome.bam"
+		tempfile = "genome/{sample}/temp.bam",
+		bamfile = "genome/{sample}_genome.bam"
 	run:
-		shell("samtools view -bh -F 4 {input} | samtools sort -o {output} -")
+		shell("samtools view -bh -F 4 {input} > {output.tempfile}")
+		shell("samtools sort -o {output.bamfile} {output.tempfile}")
 
 rule index_bam:
 	input: "genome/{sample}_genome.bam"
@@ -86,7 +115,7 @@ rule map_telo_0_mismatch:
 		telo_index = TELO_INDEX,
 		al = "fasta/{sample}_0_al.fa",
 		m = "fasta/{sample}_0_max.fa"
-	threads: 4
+	threads: 8
 	log:
 		"logs/{sample}_map_0.log"
 	shell:
@@ -101,7 +130,7 @@ rule map_telo_1_mismatch:
 		telo_index = TELO_INDEX,
 		al = "fasta/{sample}_1_al.fa",
 		m = "fasta/{sample}_1_max.fa"
-	threads: 4
+	threads: 8
 	log:
 		"logs/{sample}_map_1.log"
 	shell:
@@ -116,7 +145,7 @@ rule map_telo_2_mismatch:
 		telo_index = TELO_INDEX,
 		al = "fasta/{sample}_2_al.fa",
 		m = "fasta/{sample}_2_max.fa"
-	threads: 4
+	threads: 8
 	log:
 		"logs/{sample}_map_2.log"
 	shell:
@@ -131,13 +160,14 @@ rule map_telo_3_mismatch:
 		telo_index = TELO_INDEX,
 		al = "fasta/{sample}_3_al.fa",
 		m = "fasta/{sample}_3_max.fa"
-	threads: 4
+	threads: 8
 	log:
 		"logs/{sample}_map_3.log"
 	shell:
 		"bowtie -f --best --strata -M 1 -S -v 3 -p {threads} --al {params.al} --un {output.un} --max {params.m} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bam} - > {log} 2>&1"
 
 rule merge_telo_reads:
+	# Combine all telo-sRNA reads together
 	input: "fasta/{sample}_unmapped_3.fa"
 	output: "fasta/{sample}_all.fa"
 	params:
@@ -146,6 +176,9 @@ rule merge_telo_reads:
 		shell('''if compgen -G "fasta/{params.sample_name}_[0-3]_*.fa" > /dev/null; then cat fasta/{params.sample_name}_[0-3]_*.fa > {output}; else touch {output}; fi''')
 
 rule get_sample_info:
+	# Get metadata:
+	#	1. total number of telo-sRNAs
+	#	2. total mapped reads in library
 	input:
 		telo_reads_file = "fasta/{sample}_all.fa",
 		genome_bam = "genome/{sample}_genome.bam",
@@ -156,7 +189,7 @@ rule get_sample_info:
 		dataset = DATASET,
 		sample_name = "{sample}"
 	run:
-		shell('''telo_reads=$(wc -l < {input.telo_reads_file}); samtools view -c {input.genome_bam} | awk -v var="$telo_reads" '{{ print "{params.dataset}_{params.sample_name}\t{params.dataset}\t{params.sample_name}\t"$0"\t"var }}' > {output}''')
+		shell('''telo_reads=$(grep -v ">" {input.telo_reads_file} | wc -l); samtools view -c {input.genome_bam} | awk -v var="$telo_reads" '{{ print "{params.dataset}_{params.sample_name}\t{params.dataset}\t{params.sample_name}\t"$0"\t"var }}' > {output}''')
 
 rule map_telo_reads_to_genome:
 	input: 
@@ -165,7 +198,7 @@ rule map_telo_reads_to_genome:
 	output: "telo/{sample}_genome.bam"
 	params:
 		idx = GENOME_INDEX
-	threads: 4
+	threads: 8
 	shell:
 		"if [[ $(wc -l < {input.fasta}) -eq 0 ]]; then samtools view -bH {input.genome_bam} > {output}; else bowtie -f --best --strata -a -S -v 0 -p {threads} {params.idx} {input.fasta} | samtools view -bh -F 4 - | samtools sort -o {output} -; fi"
 
@@ -182,6 +215,7 @@ rule convert_data:
 		shell("compile_data -d {params.dataset} -b fasta/{params.sample_name} -o {output.reads_file}")
 
 rule store_results:
+	# Load library data and metadata into SQLite3 database
 	input:
 		alignment_file = "results/{sample}_alignments.txt",
 		reads_file = "results/{sample}_reads.txt",
@@ -192,6 +226,7 @@ rule store_results:
 		"ngs_store -d {output} -s {input.sample_info} -r {input.reads_file} -a {input.alignment_file}"
 
 rule merge_db:
+	# Add all library databases into one database for the dataset
 	input:
 		expand("results/{sample}.db", sample = SAMPLES)
 	output: "results/" + DATASET + ".db"
