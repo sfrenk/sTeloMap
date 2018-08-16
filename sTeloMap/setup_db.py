@@ -5,10 +5,12 @@ import sys
 import sqlite3
 import argparse
 
+# Setup a new sRNA-telo sqlite3 database
+
 def setup_db(db_name):
 
 	if os.path.exists(db_name):
-		sys.exit('ERROR: srna_telo.db already exists!')
+		sys.exit('ERROR: ' + db_name + ' already exists!')
 
 	print("Creating new database: " + db_name)
 

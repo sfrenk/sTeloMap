@@ -14,7 +14,6 @@ import os
 #	2. Run the snakemake script
 		# bash run_snakemake.sh
 
-
 ############################    PARAMETERS    ##############################
 
 # Input parameters
@@ -32,6 +31,9 @@ TELO_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/telomere/bowtie/telomere"
 GENOME_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/WS251/genome/bowtie/genome"
 MULTI_FLAG = "-M 1"
 MISMATCH = "0"
+
+# DB parameters
+UTILDIR = ""
 
 ###############################################################################
 
@@ -59,11 +61,12 @@ rule filter_srna:
 		filter_base = FILTER_BASE,
 		size = SIZE,
 		trim = TRIM,
-		min_trim_length = MIN_TRIM_LENGTH
+		min_trim_length = MIN_TRIM_LENGTH,
+		util_dir = UTILDIR
 	log:
 		"logs/{sample}_filter.log"
 	shell:
-		"small_rna_filter \
+		"python3 {params.util_dir}/small_rna_filter.py \
 		-f {params.filter_base} \
 		-s {params.size} \
 		-t {params.trim} \
@@ -209,10 +212,11 @@ rule convert_data:
 		reads_file = "results/{sample}_reads.txt"
 	params:
 		dataset = DATASET,
-		sample_name = "{sample}"
+		sample_name = "{sample}",
+		util_dir = UTILDIR
 	run:
 		shell('''if [[ $(samtools view {input} | wc -l) -eq 0 ]]; then touch {output.alignment_file}; else samtools view {input} | awk -v OFS="\t" -v d={params.dataset} -v s={params.sample_name} '{{print d"_"s"_"$1,$3,$4,1-($2/16),$6}}' > {output.alignment_file}; fi''')
-		shell("compile_data -d {params.dataset} -b fasta/{params.sample_name} -o {output.reads_file}")
+		shell("python3 {params.util_dir}/db/compile_data.py -d {params.dataset} -b fasta/{params.sample_name} -o {output.reads_file}")
 
 rule store_results:
 	# Load library data and metadata into SQLite3 database
@@ -222,13 +226,17 @@ rule store_results:
 		sample_info = "sample_info/{sample}_info.txt"
 	output:
 		"results/{sample}.db"
+	params:
+		util_dir = UTILDIR
 	shell:
-		"ngs_store -d {output} -s {input.sample_info} -r {input.reads_file} -a {input.alignment_file}"
+		"python3 {params.util_dir}/db/ngs_store.py -d {output} -s {input.sample_info} -r {input.reads_file} -a {input.alignment_file}"
 
 rule merge_db:
 	# Add all library databases into one database for the dataset
 	input:
 		expand("results/{sample}.db", sample = SAMPLES)
 	output: "results/" + DATASET + ".db"
+	params:
+		util_dir = UTILDIR
 	shell:
-		"merge_db -o {output} {input}"
+		"python3 {params.util_dir}/db/merge_db.py -o {output} {input}"

@@ -7,6 +7,8 @@ import os
 import sys
 import pandas as pd
 
+# Merge telo-sRNA databases
+
 def merge_db(db_output_name, databases):
 
 	# Setup master db (this will be the output)

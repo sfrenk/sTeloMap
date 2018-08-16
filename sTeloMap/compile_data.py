@@ -5,6 +5,8 @@ from Bio import SeqIO
 import subprocess
 import argparse
 
+# Combine fasta files of telomeric reads into a single table
+
 def compile_reads_data(reads_base, reads_output_file, dataset):
 
 	''' Combines fasta files of reads mapping to telomeres into a single table file '''

@@ -6,6 +6,8 @@ import setup_db
 import os
 import argparse
 
+# Store telo-sRNA table file as sqlite3 database
+
 def sql_store(srna_db, sample_file, reads_file, alignments_file):
 
 	''' Puts data into sqlite3 db'''
@@ -15,7 +17,6 @@ def sql_store(srna_db, sample_file, reads_file, alignments_file):
 	c = conn.cursor()
 
 	# Store sample info
-
 	sample_info = pd.read_csv(sample_file, sep = "\t", header = None, names = ["sample_id", "dataset", "name", "total_mapped", "telo_reads"])
 
 	sample_info.to_sql("sample_info", conn, if_exists = 'append', index = False)

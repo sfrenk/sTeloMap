@@ -2,8 +2,11 @@
 
 # Hard variables
 
-# Directory containing Snakemake and cluster.json files
-snakedir='/nas/longleaf/home/sfrenk/pipelines/snakemake'
+# Directories containing scripts
+# Determine these by checking the location of this script
+#snakedir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+snakedir="$(dirname "$(readlink -f "$0")")"
+utildir="$(echo $snakedir | sed -r 's/snakemake$/util/')"
 
 # Modules to be used in pipeline
 modules="anaconda python bowtie/1.1.2 samtools subread"
@@ -65,7 +68,7 @@ case $pipeline in
 esac
 
 # Copy over the snakefile
-cp ${snakedir}/${snakefile} ./${snakefile}
+cp ${snakedir}/${snakefile} .
 
 # Edit base directory in Snakefile
 base="$(basename ${dir})"
@@ -86,7 +89,10 @@ fi
 
 # Edit extension in Snakefile
 extension="\"${extension}\""
-sed -i -r -e "s/^EXTENSION.*/EXTENSION = ${extension}/g" "$snakefile"
+sed -i -r -e "s@^EXTENSION.*@EXTENSION = ${extension}@g" "$snakefile"
+
+# Edit util dir location in Snakefile
+sed -i -r -e "s@^UTILDIR.*@UTILDIR = \"${utildir}\"@g" "$snakefile"
 
 # Create Snakmake command script
 printf "#!/usr/bin/bash\n\n" > "run_snakemake.sh"
