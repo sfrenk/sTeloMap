@@ -33,7 +33,7 @@ if [[ $dir == $snakefile_dir ]]; then
 fi
 
 # Copy over the snakefile
-snakefile="call_variants.Snakefile"
+snakefile="srna_telo.Snakefile"
 cp ${snakefile_dir}/${snakefile} ./${snakefile}
 
 # Edit base directory in Snakefile
@@ -54,9 +54,12 @@ elif [[ ext_count != 1 ]]; then
 	extension=".fastq.gz"
 fi
 
-# Edit extension in Snakefile
+# Edit extension and utils_dir in Snakefile
 extension="\"${extension}\""
-sed -i -r -e "s/^EXTENSION.*/EXTENSION = ${extension}/g" "$snakefile"
+sed -i -e "s|^EXTENSION.*|EXTENSION = ${extension}|g" "$snakefile"
+utils_dir="${snakefile_dir%/snakemake}"
+utils_dir="\"${utils_dir}\""
+sed -i -e "s|^UTILS_DIR.*|UTILS_DIR = ${utils_dir}|g" "$snakefile"
 
 # Create Snakmake command script
 printf "#!/usr/bin/bash\n" > "run_snakemake.sh"
