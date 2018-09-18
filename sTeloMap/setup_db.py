@@ -23,7 +23,7 @@ def setup_db(db_name):
 	# sample_info
 	c.execute("CREATE TABLE sample_info (sample_id text primary key, dataset text, name text, total_mapped integer, telo_reads integer)")
 	c.execute("CREATE TABLE reads (read_id text primary key, sample_id text, sequence text, mismatches integer, foreign key(sample_id) references sample_info(sample_id))")
-	c.execute("CREATE TABLE alignments (alignment_id integer primary key autoincrement, read_id text, chrom text, pos integer, strand integer, CIGAR text, foreign key(read_id) references reads(read_id))")
+	c.execute("CREATE TABLE alignments (alignment_id integer primary key autoincrement, read_id text, chrom text, pos integer, strand integer, n_hits integer, foreign key(read_id) references reads(read_id))")
 
 	# Save changes
 	conn.commit()

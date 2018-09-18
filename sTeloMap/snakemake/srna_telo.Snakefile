@@ -103,85 +103,53 @@ rule butter_mapping_genome:
 		"mv filtered/{params.sample_name}.bam genome/{params.sample_name}_genome.bam; "
 		"mv filtered/{params.sample_name}.bam.bai genome/{params.sample_name}_genome.bam.bai; "
 
-rule map_telo_0_mismatch:
-	input: "filtered/{sample}.fa"
+rule map_telo:
+	input:
+		"filtered/{sample}.fa"
 	output:
-		un = "fasta/{sample}_unmapped_0.fa",
-		bam = "telo/{sample}_0.bam"
+		"telo/{sample}.bam"
 	params:
-		telo_index = TELO_INDEX,
-		al = "fasta/{sample}_0_al.fa",
-		m = "fasta/{sample}_0_max.fa"
+		telo_index = TELO_INDEX
 	threads: 8
 	log:
-		"logs/{sample}_map_0.log"
+		"logs/{sample}_map_telo.log"
 	shell:
 		"module purge; " 
 		"module add bowtie/1.1.2 samtools/1.8 && \
-		bowtie -f --best --strata -M 1 -S -v 0 -p {threads} --al {params.al} --un {output.un} --max {params.m} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bam} - > {log} 2>&1"
+		bowtie -f --best --strata -M 1 -S -v 3 -p {threads} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output} - > {log} 2>&1"
 
-rule map_telo_1_mismatch:
-	input: "fasta/{sample}_unmapped_0.fa"
+rule index_telo_bam:
+	input:
+		"telo/{sample}.bam"
 	output:
-		un = "fasta/{sample}_unmapped_1.fa",
-		bam = "telo/{sample}_1.bam"
-	params:
-		telo_index = TELO_INDEX,
-		al = "fasta/{sample}_1_al.fa",
-		m = "fasta/{sample}_1_max.fa"
-	threads: 8
+		"telo/{sample}.bam.bai"
 	log:
-		"logs/{sample}_map_1.log"
+		"logs/{sample}_index_telo_bam.log"
 	shell:
-		"module purge; " 
-		"module add bowtie/1.1.2 samtools/1.8 && \
-		bowtie -f --best --strata -M 1 -S -v 1 -p {threads} --al {params.al} --un {output.un} --max {params.m} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bam} - > {log} 2>&1"
+		"module add samtools/1.8; "
+		"samtools index {input}"
 
-rule map_telo_2_mismatch:
-	input: "fasta/{sample}_unmapped_1.fa"
+rule extract_telo_reads:
+	input:
+		telo_bam = "telo/{sample}.bam",
+		telo_idx = "telo/{sample}.bam.bai",
+		genome_bam = "genome/{sample}_genome.bam",
+		genome_idx = "genome/{sample}_genome.bam.bai"
 	output:
-		un = "fasta/{sample}_unmapped_2.fa",
-		bam = "telo/{sample}_2.bam"
+		reads_file = "results/{sample}_reads.txt",
+		alignments_file = "results/{sample}_alignments.txt"
 	params:
-		telo_index = TELO_INDEX,
-		al = "fasta/{sample}_2_al.fa",
-		m = "fasta/{sample}_2_max.fa"
-	threads: 8
-	log:
-		"logs/{sample}_map_2.log"
-	shell:
-		"module purge; " 
-		"module add bowtie/1.1.2 samtools/1.8 && \
-		bowtie -f --best --strata -M 1 -S -v 2 -p {threads} --al {params.al} --un {output.un} --max {params.m} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bam} - > {log} 2>&1"
-
-rule map_telo_3_mismatch:
-	input: "fasta/{sample}_unmapped_2.fa"
-	output:
-		un = "fasta/{sample}_unmapped_3.fa",
-		bam = "telo/{sample}_2.bam"
-	params:
-		telo_index = TELO_INDEX,
-		al = "fasta/{sample}_3_al.fa",
-		m = "fasta/{sample}_3_max.fa"
-	threads: 8
-	log:
-		"logs/{sample}_map_3.log"
-	shell:
-		"module purge; " 
-		"module add bowtie/1.1.2 samtools/1.8 && \
-		bowtie -f --best --strata -M 1 -S -v 3 -p {threads} --al {params.al} --un {output.un} --max {params.m} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bam} - > {log} 2>&1"
-
-rule merge_telo_reads:
-	input: "fasta/{sample}_unmapped_3.fa"
-	output: "fasta/{sample}_all.fa"
-	params:
+		utils_dir = UTILS_DIR,
+		dataset = DATASET,
 		sample_name = "{sample}"
-	run:
-		shell('''if compgen -G "fasta/{params.sample_name}_[0-3]_*.fa" > /dev/null; then cat fasta/{params.sample_name}_[0-3]_*.fa > {output}; else touch {output}; fi''')
+	log:
+		"logs/{sample}_extract_telo_reads.log"
+	shell:
+		"python3 {params.utils_dir}/extract_telo_reads.py -d {params.dataset} -s {params.sample_name} -o results/{params.sample_name} -t {input.telo_bam} -g {input.genome_bam} &> {log}"
 
 rule get_sample_info:
 	input:
-		telo_reads_file = "fasta/{sample}_all.fa",
+		telo_reads_file = "results/{sample}_reads.txt",
 		genome_bam = "genome/{sample}_genome.bam",
 		bam_index = "genome/{sample}_genome.bam.bai"
 	output:
@@ -189,35 +157,11 @@ rule get_sample_info:
 	params:
 		dataset = DATASET,
 		sample_name = "{sample}"
+	log:
+		"logs/{sample}_get_sample_info.log"
 	run:
 		"module add samtools; "
-		shell('''telo_reads=$(wc -l < {input.telo_reads_file}); module add samtools/1.8 && samtools view -c {input.genome_bam} | awk -v var="$telo_reads" '{{ print "{params.dataset}_{params.sample_name}\t{params.dataset}\t{params.sample_name}\t"$0"\t"var }}' > {output}''')
-
-rule map_telo_reads_to_genome:
-	input: 
-		genome_bam = "genome/{sample}_genome.bam",
-		fasta = "fasta/{sample}_all.fa"
-	output: "telo/{sample}_genome.bam"
-	params:
-		idx = lambda wildcards: get_ref('{sample}'.format(sample = wildcards.sample))
-	threads: 8
-	shell:
-		"module purge; " 
-		"module add bowtie/1.1.2 samtools/1.8 && \
-		if [[ $(wc -l < {input.fasta}) -eq 0 ]]; then samtools view -bH {input.genome_bam} > {output}; else bowtie -f --best --strata -a -S -v 0 -p {threads} {params.idx} {input.fasta} | samtools view -bh -F 4 - | samtools sort -o {output} -; fi"
-
-rule convert_data:
-	input: "telo/{sample}_genome.bam"
-	output: 
-		alignment_file = "results/{sample}_alignments.txt",
-		reads_file = "results/{sample}_reads.txt"
-	params:
-		dataset = DATASET,
-		sample_name = "{sample}",
-		utils_dir = UTILS_DIR
-	run:
-		shell('''module add samtools/1.8 && if [[ $(samtools view {input} | wc -l) -eq 0 ]]; then touch {output.alignment_file}; else samtools view {input} | awk -v OFS="\t" -v d={params.dataset} -v s={params.sample_name} '{{print d"_"s"_"$1,$3,$4,1-($2/16),$6}}' > {output.alignment_file}; fi''')
-		shell("module add python && python3 {params.utils_dir}/compile_data.py -d {params.dataset} -b fasta/{params.sample_name} -o {output.reads_file}")
+		shell('''telo_reads=$(wc -l < {input.telo_reads_file}); module add samtools/1.8 && samtools view -c {input.genome_bam} | awk -v var="$telo_reads" '{{ print "{params.dataset}_{params.sample_name}\t{params.dataset}\t{params.sample_name}\t"$0"\t"var }}' > {output} 2> {log}''')
 
 rule store_results:
 	input:
@@ -226,11 +170,13 @@ rule store_results:
 		sample_info = "sample_info/{sample}_info.txt"
 	output:
 		"results/{sample}.db"
-	param:
+	params:
 		utils_dir = UTILS_DIR
+	log:
+		"logs/{sample}_store_results.log"
 	shell:
 		"module add python; "
-		"python3 {params.utils_dir}/ngs_store.py -d {output} -s {input.sample_info} -r {input.reads_file} -a {input.alignment_file}"
+		"python3 {params.utils_dir}/ngs_store.py -d {output} -s {input.sample_info} -r {input.reads_file} -a {input.alignment_file} &> {log}"
 
 rule merge_db:
 	input:
@@ -239,6 +185,8 @@ rule merge_db:
 		"results/" + DATASET + ".db"
 	params:
 		utils_dir = UTILS_DIR
+	log:
+		"logs/merge_db.log"
 	shell:
 		"module add python; "
-		"python3 {parmas.utils_dir}/merge_db.py -o {output} {input}"
+		"python3 {params.utils_dir}/merge_db.py -o {output} {input} &> {log}"

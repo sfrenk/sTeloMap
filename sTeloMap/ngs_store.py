@@ -24,10 +24,12 @@ def sql_store(srna_db, sample_file, reads_file, alignments_file):
 	# Store reads
 	reads = pd.read_csv(reads_file, sep = "\t", header = None, names = ["read_id", "sample_id", "sequence", "mismatches"])
 
+	#reads.read_id = reads.sample_id + "_" + reads.read_id
+
 	reads.to_sql("reads", conn, if_exists = 'append', index = False)
 
 	# Store alignments
-	alignments = pd.read_csv(alignments_file, sep = "\t", header = None, names = ["read_id", "chrom", "pos", "strand", "CIGAR"])
+	alignments = pd.read_csv(alignments_file, sep = "\t", header = None, names = ["read_id", "chrom", "pos", "strand", "n_hits"])
 
 	alignments.to_sql("alignments", conn, if_exists = 'append', index = False)
 
