@@ -10,7 +10,22 @@ import argparse
 
 def sql_store(srna_db, sample_file, reads_file, alignments_file):
 
-	''' Puts data into sqlite3 db'''
+	'''
+	Puts data into sqlite3 db
+
+	Args:
+		srna_db:
+			db file created using the setup_db function
+		sample_file:
+			sample information file created by the get_sample_info 	rule in the srna_telo.Snakefile
+		reads_file:
+			reads file created by the extract_telo_reads rule in the 	srna_telo.Snakefile
+		alignments_file:
+			alignments file created by the extract_telo_reads rule in the 	srna_telo.Snakefile
+
+	Returns:
+		None
+	'''
 	
 	# Open db connection
 	conn = sqlite3.connect(srna_db)
@@ -29,7 +44,7 @@ def sql_store(srna_db, sample_file, reads_file, alignments_file):
 	reads.to_sql("reads", conn, if_exists = 'append', index = False)
 
 	# Store alignments
-	alignments = pd.read_csv(alignments_file, sep = "\t", header = None, names = ["read_id", "chrom", "pos", "strand", "n_hits"])
+	alignments = pd.read_csv(alignments_file, sep = "\t", header = None, names = ["read_id", "chrom", "pos", "strand", "n_hits", "p_method", "prob"])
 
 	alignments.to_sql("alignments", conn, if_exists = 'append', index = False)
 

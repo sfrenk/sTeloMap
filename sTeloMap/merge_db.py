@@ -11,6 +11,10 @@ import pandas as pd
 
 def merge_db(db_output_name, databases):
 
+	'''
+	Merges multiple dbs into a single output db
+	'''
+
 	# Setup master db (this will be the output)
 	if not os.path.exists(db_output_name):
 		setup_db.setup_db(db_output_name)

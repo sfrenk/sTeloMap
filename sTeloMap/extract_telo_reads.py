@@ -16,6 +16,7 @@ args = parser.parse_args()
 
 print("Extracting telomeric reads...")
 
+# Extract sample name from bam file name unless specifically given using the --sample argument
 if args.sample == "default":
 	sample_name = os.path.basename(args.input_file).replace(".bam", "")
 else:
@@ -50,13 +51,20 @@ with open(args.output + "_alignments.txt", "w") as f:
 			chrom = genome_bamfile.get_reference_name(read.reference_id)
 
 			# Get number of hits
-			nh = read.get_tag("XX")
+			nhits_tag = read.get_tag("XX")
+
+			# Get placement method:
+			placement_tag = read.get_tag("XY")
+
+			# Get probability of correct mapping
+			prob_tag = read.get_tag("XZ")
+
 			# Get strand
 			if read.is_reverse:
 				strand = 0
 			else:
 				strand = 1
 
-			f.write("\t".join([args.dataset + "_" + sample_name + "_" + read.query_name, chrom, str(read.reference_start), str(strand), str(nh)]) + "\n")
+			f.write("\t".join([args.dataset + "_" + sample_name + "_" + read.query_name, chrom, str(read.reference_start), str(strand), str(nhits_tag), str(placement_tag), str(prob_tag)]) + "\n")
 
 telo_bamfile.close()

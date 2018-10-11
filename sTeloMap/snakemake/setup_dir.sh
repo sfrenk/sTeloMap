@@ -3,28 +3,25 @@
 # Hard variables
 
 # Directory containing Snakemake and cluster.json files
-snakefile_dir=/home/sfrenk/Documents/Projects_sup/charlie_paper/srna_telo/pipeline/sTeloMap/snakemake
+# This should have been set by install.sh
 
-usage="Create directory with Snakemake files required for pipeline \n\n setup_dir.sh <working directory (default: current directory)> \n\n"
+snakefile_dir=""
 
-dir="."
+usage="
+Create directory with Snakemake files required for sTeloMap. Usage:
 
-if [ -z "$1" ]; then
-    echo "$usage"
-    exit
-fi
+setup_dir.sh <working directory (default: current directory)>
+"
 
-dir="$1"
+help_args=("-h" "--help")
 
-
-if [[ ! -d $dir ]]; then
-	echo "ERROR: Invalid working directory"
-	exit 1
-fi
-
-if [[ ! -d $snakefile_dir ]]; then
-	echo "ERROR: Invalid snakefile directory"
-	exit 1
+if [[ -z "$1" ]]; then
+    dir="."
+elif [[ ${help_args[@]} =~ "$1" ]]; then
+	echo "$usage"
+	exit 0
+else
+	dir="$1"
 fi
 
 if [[ $dir == $snakefile_dir ]]; then

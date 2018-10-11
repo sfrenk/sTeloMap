@@ -6,7 +6,7 @@ This pipeline searches for reads that map to telomeres with up to three mismatch
 
 ```
 git clone https://github.com/sfrenk/sTeloMap.git
-
+cd sTeloMap
 bash install.sh
 ```
 
