@@ -32,20 +32,26 @@ with open(args.output + "_reads.txt", "w") as f:
 	for read in telo_bamfile.fetch():
 
 		# Get number of mismatches
-		mm = int(read.get_tag("XM"))
+		mm = int(read.get_tag("NM"))
 		if mm <= 3:
 			read_ids.append(read.query_name)
-			f.write("\t".join([args.dataset + "_" + sample_name + "_" + read.query_name, args.dataset + "_" + sample_name, read.seq, str(mm)]) + "\n")
+			f.write("\t".join([args.dataset + "_" + sample_name + "_" + read.query_name, args.dataset + "_" + sample_name, read.get_forward_sequence(), str(mm)]) + "\n")
 
 telo_bamfile.close()
 
 ## Alignment info ##
 genome_bamfile = pysam.AlignmentFile(args.genome_bam, "rb")
 
+# Alignments are written to both a text file and a bam file
+output_bamfile = pysam.AlignmentFile(args.output + "_telo.bam","wb", template = genome_bamfile)
+
 with open(args.output + "_alignments.txt", "w") as f:
 	for read in genome_bamfile.fetch():
 
 		if read.query_name in read_ids:
+
+			# Write read to bam file
+			output_bamfile.write(read)
 			
 			# Get chromosome
 			chrom = genome_bamfile.get_reference_name(read.reference_id)
@@ -67,4 +73,6 @@ with open(args.output + "_alignments.txt", "w") as f:
 
 			f.write("\t".join([args.dataset + "_" + sample_name + "_" + read.query_name, chrom, str(read.reference_start), str(strand), str(nhits_tag), str(placement_tag), str(prob_tag)]) + "\n")
 
-telo_bamfile.close()
+genome_bamfile.close()
+output_bamfile.close()
+pysam.index(args.output + "_telo.bam", args.output + "_telo.bam.bai")

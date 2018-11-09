@@ -137,7 +137,9 @@ rule extract_telo_reads:
 		genome_idx = "genome/{sample}_genome.bam.bai"
 	output:
 		reads_file = "results/{sample}_reads.txt",
-		alignments_file = "results/{sample}_alignments.txt"
+		alignments_file = "results/{sample}_alignments.txt",
+		alignments_bam = "results/{sample}_telo.bam",
+		alignments_bam_idx = "results/{sample}_telo.bam.bai"
 	params:
 		utils_dir = UTILS_DIR,
 		dataset = DATASET,
