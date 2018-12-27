@@ -11,6 +11,7 @@ parser.add_argument("-g", "--genome_bam", help = "bam file containing genome ali
 parser.add_argument("-o", "--output", help = "output basename", required = True, type = str)
 parser.add_argument("-d", "--dataset", help = "dataset name", required = True, type = str)
 parser.add_argument("-s", "--sample", help = "sample name (by default, this is extracted from the bam file name)", default = "default")
+parser.add_argument("-b", "--bowtie", help = "reads were mapped with bowtie rather than butter, therefore XX, XY and XZ flags are not present and will be set to NA", action = "store_true", default = False)
 
 args = parser.parse_args()
 
@@ -56,14 +57,19 @@ with open(args.output + "_alignments.txt", "w") as f:
 			# Get chromosome
 			chrom = genome_bamfile.get_reference_name(read.reference_id)
 
-			# Get number of hits
-			nhits_tag = read.get_tag("XX")
+			if args.bowtie:
+				nhits_tag = "NA"
+				placement_tag = "NA"
+				prob_tag = "NA"
+			else:
+				# Get number of hits
+				nhits_tag = read.get_tag("XX")
 
-			# Get placement method:
-			placement_tag = read.get_tag("XY")
+				# Get placement method:
+				placement_tag = read.get_tag("XY")
 
-			# Get probability of correct mapping
-			prob_tag = read.get_tag("XZ")
+				# Get probability of correct mapping
+				prob_tag = read.get_tag("XZ")
 
 			# Get strand
 			if read.is_reverse:

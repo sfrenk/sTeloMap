@@ -10,8 +10,9 @@ import os
 ############################    PARAMETERS    ##############################
 
 # Input parameters
-BASEDIR = "raw_compiled"
-EXTENSION = ".txt.gz"
+BASEDIR = ""
+EXTENSION = ".fastq.gz"
+SPECIES = None
 
 # Filtering parameters
 FILTER_BASE = "A,T,C,G"
@@ -19,8 +20,16 @@ SIZE = "18,30"
 TRIM = False
 MIN_TRIM_LENGTH = 0
 
+# Trimming parameters
+TRIM = True
+ADAPTERS = "~/proj/seq/bbmap/adapters.fa"
+
 # Mapping parameters
-TELO_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/telomere/bowtie/telomere"
+MAPPING_METHOD = "butter"
+if SPECIES == "mouse":
+	TELO_INDEX = "~/proj/seq/telomere/mouse/bowtie/mouse_telomere"
+else:
+	TELO_INDEX = "/nas/longleaf/home/sfrenk/proj/seq/telomere/bowtie/telomere"
 
 # Other parameters
 UTILS_DIR = "/nas/longleaf/home/sfrenk/scripts/util"
@@ -28,24 +37,23 @@ UTILS_DIR = "/nas/longleaf/home/sfrenk/scripts/util"
 ###############################################################################
 
 # Get bowtie index for species
-refs = {"elegans" : "/nas/longleaf/home/sfrenk/proj/seq/WS251/genome/bowtie/genome.fa", "remanei" : "/nas/longleaf/home/sfrenk/proj/seq/remanei/bowtie/genome.fa", "briggsae" : "/nas/longleaf/home/sfrenk/proj/seq/briggsae/WS263/bowtie/genome.fa"}
+refs = {"elegans" : "/nas/longleaf/home/sfrenk/proj/seq/WS251/genome/bowtie/genome.fa", "remanei" : "/nas/longleaf/home/sfrenk/proj/seq/remanei/bowtie/genome.fa", "briggsae" : "/nas/longleaf/home/sfrenk/proj/seq/briggsae/WS263/bowtie/genome.fa", "mouse": "/nas/longleaf/home/sfrenk/proj/seq/mouse/GRCm38/bowtie/genome.fa"}
 
 def get_ref(sample_name):
 
-	species=re.search("elegans|briggsae|remanei", sample_name)
-	if species is None:
-		species="elegans"
+	if SPECIES is None:
+		species = re.search("elegans|briggsae|remanei", sample_name)
+		if species is None:
+			species = "elegans"
+		else:
+			species = species.group(0)
+
 	else:
-		species = species.group(0)
-	
+		species = SPECIES
+		
 	species_ref = refs[species]
 	
 	return(species_ref)
-
-#if SPECIES not in refs:
-#	print("ERROR: Unknown reference!")
-#else:
-#	REF = refs[SPECIES]
 
 DATASET = re.search("([^/]*)/?$", BASEDIR).group(1)
 SAMPLES = glob.glob(BASEDIR + "/*" + EXTENSION)
@@ -61,47 +69,135 @@ rule all:
         expand("results/{sample}.db", sample = SAMPLES),
         "results/" + DATASET + ".db"
 
-rule filter_srna:
-	input:
-		BASEDIR + "/{sample}" + EXTENSION
-	output:
-		"filtered/{sample}.fa"
-	params:
-		filter_base = FILTER_BASE,
-		size = SIZE,
-		trim = TRIM,
-		min_trim_length = MIN_TRIM_LENGTH,
-		utils_dir = UTILS_DIR
-	log:
-		"logs/{sample}_filter.log"
-	shell:
-		"module add python; "
-		"python3 {params.utils_dir}/small_rna_filter.py \
-		-f {params.filter_base} \
-		-s {params.size} \
-		-t {params.trim} \
-		-m {params.min_trim_length} \
-		-o {output} \
-		{input} > {log} 2>&1"
+if TRIM:
+	rule trim:
+		input:
+			BASEDIR + "/{sample}" + EXTENSION
+		output:
+			"trimmed/{sample}.fastq.gz"
+		params:
+			adapter_file = ADAPTERS
+		threads: 1
+		log:
+			"logs/{sample}_trim.log"
+		shell:
+			"module add bbmap; "
+			"bbduk.sh -Xmx4g in={input} out={output} ref={params.adapter_file} ktrim=r overwrite=true k=23 maq=20 mink=11 hdist=1 &> {log}"
 
-rule butter_mapping_genome:
-	input:
-		"filtered/{sample}.fa"
-	output:
-		bamfile = "genome/{sample}_genome.bam",
-		bamidx = "genome/{sample}_genome.bam.bai"
-	params:
-		ref = lambda wildcards: get_ref('{sample}'.format(sample = wildcards.sample)),
-		sample_name="{sample}"
-	log:
-		"logs/{sample}_map_genome.log"
-	threads: 8
-	shell:
-		"module purge; " 
-		"module add bowtie/1.1.2 perl samtools/0.1.19 && \
-		butter --no_condense --aln_cores {threads} --max_rep 10000 --bam2wig none {input} {params.ref} > {log} 2>&1; "
-		"mv filtered/{params.sample_name}.bam genome/{params.sample_name}_genome.bam; "
-		"mv filtered/{params.sample_name}.bam.bai genome/{params.sample_name}_genome.bam.bai; "
+	rule filter_srna:
+			input:
+				"trimmed/{sample}.fastq.gz"
+			output:
+				"filtered/{sample}.fa"
+			params:
+				filter_base = FILTER_BASE,
+				size = SIZE,
+				trim = TRIM,
+				min_trim_length = MIN_TRIM_LENGTH,
+				utils_dir = UTILS_DIR
+			log:
+				"logs/{sample}_filter.log"
+			shell:
+				"module add python; "
+				"python3 {params.utils_dir}/small_rna_filter.py \
+				-f {params.filter_base} \
+				-s {params.size} \
+				-t {params.trim} \
+				-m {params.min_trim_length} \
+				-o {output} \
+				{input} > {log} 2>&1"
+
+else:
+	rule filter_srna:
+		input:
+			BASEDIR + "/{sample}" + EXTENSION
+		output:
+			"filtered/{sample}.fa"
+		params:
+			filter_base = FILTER_BASE,
+			size = SIZE,
+			trim = TRIM,
+			min_trim_length = MIN_TRIM_LENGTH,
+			utils_dir = UTILS_DIR
+		log:
+			"logs/{sample}_filter.log"
+		shell:
+			"module add python; "
+			"python3 {params.utils_dir}/small_rna_filter.py \
+			-f {params.filter_base} \
+			-s {params.size} \
+			-t {params.trim} \
+			-m {params.min_trim_length} \
+			-o {output} \
+			{input} > {log} 2>&1"
+
+if MAPPING_METHOD == "butter":
+
+	BOWTIE_FLAG = ""
+
+	rule butter_mapping_genome:
+		input:
+			"filtered/{sample}.fa"
+		output:
+			bamfile = "genome/{sample}_genome.bam",
+			bamidx = "genome/{sample}_genome.bam.bai"
+		params:
+			ref = lambda wildcards: get_ref('{sample}'.format(sample = wildcards.sample)),
+			sample_name="{sample}"
+		log:
+			"logs/{sample}_map_genome.log"
+		threads: 8
+		shell:
+			"module purge; " 
+			"module add bowtie/1.1.2 perl samtools/0.1.19 && \
+			butter --no_condense --aln_cores {threads} --max_rep 10000 --bam2wig none {input} {params.ref} > {log} 2>&1; "
+			"mv filtered/{params.sample_name}.bam genome/{params.sample_name}_genome.bam; "
+			"mv filtered/{params.sample_name}.bam.bai genome/{params.sample_name}_genome.bam.bai; "
+
+elif MAPPING_METHOD == "bowtie":
+
+	BOWTIE_FLAG = "-b"
+
+	rule bowtie_mapping_genome:
+		input:
+			"filtered/{sample}.fa"
+		output:
+			"genome/{sample}_genome.sam"
+		params:
+			ref = lambda wildcards: get_ref('{sample}'.format(sample = wildcards.sample)),
+			multi_flag = "-M 1",
+			mismatch = "0",
+			sample_name = "{sample}"
+		log:
+			"logs/{sample}_map_genome.log"
+		threads: 8
+		shell:
+			"module purge; "
+			"module add bowtie samtools; "
+			"bowtie -f --best --strata -S \
+			-p {threads} \
+			{params.multi_flag} \
+			-v {params.mismatch} \
+			{params.ref} \
+			{input} {output} > {log} 2>&1 ;"
+
+	rule convert_to_bam:
+		input:
+			"genome/{sample}_genome.sam"
+		output: 
+			bamfile = "genome/{sample}_genome.bam",
+			bamidx = "genome/{sample}_genome.bam.bai"
+		log:
+			"logs/{sample}_convert_to_bam.log"
+		shell:
+			"module add samtools; "
+			"samtools view -bh -F 4 {input} | samtools sort -o {output.bamfile} -; "
+			"samtools index {output.bamfile}"
+
+else:
+	raise Exception(
+		"ERROR: MAPPING_METHOD should be set to 'butter' or 'bowtie'"
+	)
 
 rule map_telo:
 	input:
@@ -116,7 +212,8 @@ rule map_telo:
 	shell:
 		"module purge; " 
 		"module add bowtie/1.1.2 samtools/1.8 && \
-		bowtie -f --best --strata -M 1 -S -v 3 -p {threads} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output} - > {log} 2>&1"
+		bowtie -f --best --strata -M 1 -S -v 3 -p {threads} {params.telo_index} {input} | samtools view -bh -F 4 - | samtools sort -o {output.bamfile} - > {log} 2>&1"
+		""
 
 rule index_telo_bam:
 	input:
@@ -143,11 +240,12 @@ rule extract_telo_reads:
 	params:
 		utils_dir = UTILS_DIR,
 		dataset = DATASET,
-		sample_name = "{sample}"
+		sample_name = "{sample}",
+		bowtie_flag = BOWTIE_FLAG
 	log:
 		"logs/{sample}_extract_telo_reads.log"
 	shell:
-		"python3 {params.utils_dir}/extract_telo_reads.py -d {params.dataset} -s {params.sample_name} -o results/{params.sample_name} -t {input.telo_bam} -g {input.genome_bam} &> {log}"
+		"python3 {params.utils_dir}/extract_telo_reads.py -d {params.dataset} -s {params.sample_name} -o results/{params.sample_name} -t {input.telo_bam} -g {input.genome_bam} {params.bowtie_flag} &> {log}"
 
 rule get_sample_info:
 	input:
